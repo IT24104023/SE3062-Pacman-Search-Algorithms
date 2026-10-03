@@ -290,42 +290,40 @@ class CornersProblem(search.SearchProblem):
                 print('Warning: no food in corner ' + str(corner))
         self._expanded = 0 # DO NOT CHANGE; Number of search nodes expanded
 
+        self.heuristicInfo = {}
+
     def getStartState(self):
         """
         Returns the start state (in your state space, not the full Pacman state
         space)
         """
-        "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        visited = tuple(c == self.startingPosition for c in self.corners)
+        return (self.startingPosition, visited)
 
     def isGoalState(self, state: Any):
         """
         Returns whether this search state is a goal state of the problem.
         """
-        "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        return all(state[1])
 
     def getSuccessors(self, state: Any):
         """
         Returns successor states, the actions they require, and a cost of 1.
-
-         As noted in search.py:
-            For a given state, this should return a list of triples, (successor,
-            action, stepCost), where 'successor' is a successor to the current
-            state, 'action' is the action required to get there, and 'stepCost'
-            is the incremental cost of expanding to that successor
         """
-
         successors = []
-        for action in [Directions.NORTH, Directions.SOUTH, Directions.EAST, Directions.WEST]:
-            # Add a successor state to the successor list if the action is legal
-            # Here's a code snippet for figuring out whether a new position hits a wall:
-            #   x,y = currentPosition
-            #   dx, dy = Actions.directionToVector(action)
-            #   nextx, nexty = int(x + dx), int(y + dy)
-            #   hitsWall = self.walls[nextx][nexty]
+        pos, visited = state
+        x, y = pos
 
-            "*** YOUR CODE HERE ***"
+        for action in [Directions.NORTH, Directions.SOUTH, Directions.EAST, Directions.WEST]:
+            dx, dy = Actions.directionToVector(action)
+            nextx, nexty = int(x + dx), int(y + dy)
+            if not self.walls[nextx][nexty]:
+                nextPos = (nextx, nexty)
+                newVisited = list(visited)
+                if nextPos in self.corners:
+                    idx = self.corners.index(nextPos)
+                    newVisited[idx] = True
+                successors.append(((nextPos, tuple(newVisited)), action, 1))
 
         self._expanded += 1 # DO NOT CHANGE
         return successors
@@ -360,8 +358,44 @@ def cornersHeuristic(state: Any, problem: CornersProblem):
     corners = problem.corners # These are the corner coordinates
     walls = problem.walls # These are the walls of the maze, as a Grid (game.py)
 
-    "*** YOUR CODE HERE ***"
-    return 0 # Default to trivial solution
+    pos, visited = state
+    unvisited = [corners[i] for i in range(len(corners)) if not visited[i]]
+    if not unvisited:
+        return 0
+
+    dist_map = problem.heuristicInfo.setdefault('dist_map', {})
+
+    def getDist(p1, p2):
+        if p1 == p2:
+            return 0
+        if p1 not in dist_map:
+            dists = {}
+            queue = util.Queue()
+            queue.push((p1, 0))
+            dists[p1] = 0
+            while not queue.isEmpty():
+                curr, d = queue.pop()
+                cx, cy = curr
+                for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                    nx, ny = cx + dx, cy + dy
+                    if not walls[nx][ny] and (nx, ny) not in dists:
+                        dists[(nx, ny)] = d + 1
+                        queue.push(((nx, ny), d + 1))
+            dist_map[p1] = dists
+        return dist_map[p1].get(p2, 999999)
+
+    import itertools
+    min_dist = float('inf')
+    for perm in itertools.permutations(unvisited):
+        current = pos
+        dist = 0
+        for corner in perm:
+            dist += getDist(current, corner)
+            current = corner
+        if dist < min_dist:
+            min_dist = dist
+
+    return min_dist
 
 class AStarCornersAgent(SearchAgent):
     "A SearchAgent for FoodSearchProblem using A* and your foodHeuristic"
