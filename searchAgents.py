@@ -289,7 +289,6 @@ class CornersProblem(search.SearchProblem):
             if not startingGameState.hasFood(*corner):
                 print('Warning: no food in corner ' + str(corner))
         self._expanded = 0 # DO NOT CHANGE; Number of search nodes expanded
-
         self.heuristicInfo = {}
 
     def getStartState(self):
@@ -309,7 +308,14 @@ class CornersProblem(search.SearchProblem):
     def getSuccessors(self, state: Any):
         """
         Returns successor states, the actions they require, and a cost of 1.
+
+         As noted in search.py:
+            For a given state, this should return a list of triples, (successor,
+            action, stepCost), where 'successor' is a successor to the current
+            state, 'action' is the action required to get there, and 'stepCost'
+            is the incremental cost of expanding to that successor
         """
+
         successors = []
         pos, visited = state
         x, y = pos
@@ -409,8 +415,8 @@ class FoodSearchProblem:
     food (dots) in a Pacman game.
 
     A search state in this problem is a tuple ( pacmanPosition, foodGrid ) where
-      pacmanPosition: a tuple (x,y) of integers specifying Pacman's position
-      foodGrid:       a Grid (see game.py) of either True or False, specifying remaining food
+    pacmanPosition: a tuple (x,y) of integers specifying Pacman's position
+    foodGrid:       a Grid (see game.py) of either True or False, specifying remaining food
     """
     def __init__(self, startingGameState: pacman.GameState):
         self.start = (startingGameState.getPacmanPosition(), startingGameState.getFood())
@@ -488,8 +494,53 @@ def foodHeuristic(state: Tuple[Tuple, List[List]], problem: FoodSearchProblem):
     problem.heuristicInfo['wallCount']
     """
     position, foodGrid = state
-    "*** YOUR CODE HERE ***"
-    return 0
+    foodList = foodGrid.asList()
+    if len(foodList) == 0:
+        return 0
+
+    walls = problem.walls
+    dist_map = problem.heuristicInfo.setdefault('dist_map', {})
+
+    def getDist(p1, p2):
+        if p1 == p2:
+            return 0
+        if p1 not in dist_map:
+            dists = {}
+            queue = util.Queue()
+            queue.push((p1, 0))
+            dists[p1] = 0
+            while not queue.isEmpty():
+                curr, d = queue.pop()
+                cx, cy = curr
+                for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                    nx, ny = cx + dx, cy + dy
+                    if not walls[nx][ny] and (nx, ny) not in dists:
+                        dists[(nx, ny)] = d + 1
+                        queue.push(((nx, ny), d + 1))
+            dist_map[p1] = dists
+        return dist_map[p1].get(p2, 999999)
+
+    max_dist = max(getDist(position, f) for f in foodList)
+    min_dist = min(getDist(position, f) for f in foodList)
+
+    if len(foodList) <= 1:
+        mst_cost = 0
+    else:
+        unvisited = set(foodList)
+        start = foodList[0]
+        unvisited.remove(start)
+        minDist = {p: getDist(start, p) for p in unvisited}
+        mst_cost = 0
+        while unvisited:
+            nextPoint = min(unvisited, key=lambda p: minDist[p])
+            mst_cost += minDist[nextPoint]
+            unvisited.remove(nextPoint)
+            for p in unvisited:
+                d = getDist(nextPoint, p)
+                if d < minDist[p]:
+                    minDist[p] = d
+
+    return max(max_dist, mst_cost + min_dist)
 
 class ClosestDotSearchAgent(SearchAgent):
     "Search for all food using a sequence of searches"
@@ -519,8 +570,7 @@ class ClosestDotSearchAgent(SearchAgent):
         walls = gameState.getWalls()
         problem = AnyFoodSearchProblem(gameState)
 
-        "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        return search.bfs(problem)
 
 class AnyFoodSearchProblem(PositionSearchProblem):
     """
@@ -554,9 +604,7 @@ class AnyFoodSearchProblem(PositionSearchProblem):
         complete the problem definition.
         """
         x,y = state
-
-        "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        return self.food[x][y]
 
 def mazeDistance(point1: Tuple[int, int], point2: Tuple[int, int], gameState: pacman.GameState) -> int:
     """
